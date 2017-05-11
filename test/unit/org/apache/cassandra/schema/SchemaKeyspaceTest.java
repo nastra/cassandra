@@ -19,6 +19,8 @@
 package org.apache.cassandra.schema;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,6 +30,7 @@ import java.util.Set;
 
 import com.google.common.collect.ImmutableMap;
 
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -51,6 +54,7 @@ import org.apache.cassandra.thrift.IndexType;
 import org.apache.cassandra.thrift.ThriftConversion;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
+import org.github.jamm.MemoryMeter;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -80,6 +84,43 @@ public class SchemaKeyspaceTest
         SchemaLoader.createKeyspace(KEYSPACE1,
                                     KeyspaceParams.simple(1),
                                     SchemaLoader.standardCFMD(KEYSPACE1, CF_STANDARD1));
+    }
+
+    @Test
+    public void verifyColumnIdentifierObjectSizeWhenTablesAreNotFlushed() throws Exception
+    {
+        Field f = SchemaKeyspace.class.getDeclaredField("FLUSH_SCHEMA_TABLES");
+        f.setAccessible(true);
+
+        Field fMod = Field.class.getDeclaredField("modifiers");
+        fMod.setAccessible(true);
+        fMod.setInt(f, f.getModifiers() & ~Modifier.FINAL);
+
+        f.setBoolean(null, false);
+
+        try
+        {
+            String cql = "CREATE TABLE IF NOT EXISTS \"CFMetaDataTest1\".shared_data (dataspace varchar,namespace varchar,name varchar," +
+                         "type varchar,integer int,long bigint,double double,float float,string varchar,instant timestamp,duration bigint," +
+                         "boolean boolean,inet inet,enum varchar,json blob,written_on timeuuid,valid_until timeuuid," +
+                         "last_updated timeuuid static,PRIMARY KEY (dataspace, valid_until, namespace, name))";
+
+            CFMetaData table = CFMetaData.compile(cql, KEYSPACE1);
+
+            KeyspaceMetadata ksm = KeyspaceMetadata.create(KEYSPACE1, KeyspaceParams.simple(1), Tables.of(table));
+            Mutation mutation = SchemaKeyspace.makeCreateTableMutation(ksm, table, FBUtilities.timestampMicros());
+            SchemaKeyspace.mergeSchema(Collections.singleton(mutation));
+
+            CFMetaData retrievedMetaData = Schema.instance.getCFMetaData(KEYSPACE1, "shared_data");
+
+            MemoryMeter meter = new MemoryMeter().withGuessing(MemoryMeter.Guess.FALLBACK_BEST).ignoreKnownSingletons();
+            Assert.assertEquals(176, meter.measureDeep(table.partitionColumns().statics.iterator().next().name));
+            Assert.assertEquals(176, meter.measureDeep(retrievedMetaData.partitionColumns().statics.iterator().next().name));
+        }
+        finally
+        {
+            f.setBoolean(null, true);
+        }
     }
 
     @Test
