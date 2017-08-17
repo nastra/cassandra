@@ -57,7 +57,8 @@ public class StressAction implements Runnable
         output.println("Sleeping 2s...");
         Uninterruptibles.sleepUninterruptibly(2, TimeUnit.SECONDS);
 
-        if (!settings.command.noWarmup)
+        // no need to do any warmup if we don't want to read/write any rows
+        if (!settings.command.noWarmup && settings.command.count > 0)
             warmup(settings.command.getFactory(settings));
         if (settings.command.truncate == SettingsCommand.TruncateWhen.ONCE)
             settings.command.truncateTables(settings);
@@ -87,9 +88,7 @@ public class StressAction implements Runnable
     {
         PrintStream warmupOutput = new PrintStream(new OutputStream() { @Override public void write(int b) throws IOException { } } );
         // do 25% of iterations as warmup but no more than 50k (by default hotspot compiles methods after 10k invocations)
-        int iterations = (settings.command.count > 0
-                         ? Math.min(50000, (int)(settings.command.count * 0.25))
-                         : 50000) * settings.node.nodes.size();
+        int iterations = Math.min(50000, (int) (settings.command.count * 0.25)) * settings.node.nodes.size();
         int threads = 100;
 
         if (settings.rate.maxThreads > 0)
