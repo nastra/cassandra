@@ -46,6 +46,7 @@ public class SSTableLoader implements StreamEventHandler
 {
     private final File directory;
     private final String keyspace;
+    private final String table;
     private final Client client;
     private final int connectionsPerHost;
     private final OutputHandler outputHandler;
@@ -61,8 +62,14 @@ public class SSTableLoader implements StreamEventHandler
 
     public SSTableLoader(File directory, Client client, OutputHandler outputHandler, int connectionsPerHost)
     {
+        this(directory, client, outputHandler, connectionsPerHost, directory.getParentFile().getName(), null);
+    }
+
+    public SSTableLoader(File directory, Client client, OutputHandler outputHandler, int connectionsPerHost, String keyspace, String table)
+    {
         this.directory = directory;
-        this.keyspace = directory.getParentFile().getName();
+        this.keyspace = keyspace;
+        this.table = table;
         this.client = client;
         this.outputHandler = outputHandler;
         this.connectionsPerHost = connectionsPerHost;
@@ -85,7 +92,16 @@ public class SSTableLoader implements StreamEventHandler
                                               return false;
                                           }
 
-                                          Pair<Descriptor, Component> p = SSTable.tryComponentFromFilename(file);
+                                          Pair<Descriptor, Component> p;
+                                          if (null != keyspace && null != table)
+                                          {
+                                              p = SSTable.tryComponentFromFilename(file, keyspace, table);
+                                          }
+                                          else
+                                          {
+                                              p = SSTable.tryComponentFromFilename(file);
+                                          }
+
                                           Descriptor desc = p == null ? null : p.left;
                                           if (p == null || !p.right.equals(Component.DATA))
                                               return false;

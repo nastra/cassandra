@@ -1,4 +1,5 @@
 4.0
+ * sstableloader now supports keyspace/table name parameters (CASSANDRA-4763)
  * Fix pending repair manager index out of bounds check (CASSANDRA-13769)
  * Don't use RangeFetchMapCalculator when RF=1 (CASSANDRA-13576)
  * Don't optimise trivial ranges in RangeFetchMapCalculator (CASSANDRA-13664)

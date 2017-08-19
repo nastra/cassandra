@@ -207,6 +207,7 @@ public class Descriptor
 
     /**
      * Parse a sstable filename, extracting both the {@code Descriptor} and {@code Component} part.
+     * The keyspace/table name will be extracted from the directory path.
      *
      * @param file the {@code File} object for the filename to parse.
      * @return a pair of the descriptor and component corresponding to the provided {@code file}.
@@ -222,6 +223,58 @@ public class Descriptor
         if (!file.isAbsolute())
             file = file.getAbsoluteFile();
 
+        SSTableInfo info = validateAndExtractInfo(file);
+        String name = file.getName();
+
+        File directory = parentOf(name, file);
+        File tableDir = directory;
+
+        // Check if it's a 2ndary index directory (not that it doesn't exclude it to be also a backup or snapshot)
+        String indexName = "";
+        if (tableDir.getName().startsWith(Directories.SECONDARY_INDEX_NAME_SEPARATOR))
+        {
+            indexName = tableDir.getName();
+            tableDir = parentOf(name, tableDir);
+        }
+
+        // Then it can be a backup or a snapshot
+        if (tableDir.getName().equals(Directories.BACKUPS_SUBDIR))
+            tableDir = tableDir.getParentFile();
+        else if (parentOf(name, tableDir).getName().equals(Directories.SNAPSHOT_SUBDIR))
+            tableDir = parentOf(name, parentOf(name, tableDir));
+
+        String table = tableDir.getName().split("-")[0] + indexName;
+        String keyspace = parentOf(name, tableDir).getName();
+
+        return Pair.create(new Descriptor(info.version, directory, keyspace, table, info.generation, info.format), info.component);
+    }
+
+    /**
+     * Parse a sstable filename, extracting both the {@code Descriptor} and {@code Component} part.
+     *
+     * @param file     the {@code File} object for the filename to parse.
+     * @param keyspace The keyspace name of the file. If <code>null</code>, then the keyspace name will be extracted
+     *                 from the directory path.
+     * @param table    The table name of the file. If <code>null</code>, then the table name will be extracted from the
+     *                 directory path.
+     * @return a pair of the descriptor and component corresponding to the provided {@code file}.
+     * @throws IllegalArgumentException if the provided {@code file} does point to a valid sstable filename. This could
+     *                                  mean either that the filename doesn't look like a sstable file, or that it is for an old and unsupported
+     *                                  versions.
+     */
+    public static Pair<Descriptor, Component> fromFilenameWithComponent(File file, String keyspace, String table)
+    {
+        if (null == keyspace || null == table)
+        {
+            return fromFilenameWithComponent(file);
+        }
+
+        SSTableInfo info = validateAndExtractInfo(file);
+        return Pair.create(new Descriptor(info.version, parentOf(file.getName(), file), keyspace, table, info.generation, info.format), info.component);
+    }
+
+    private static SSTableInfo validateAndExtractInfo(File file)
+    {
         String name = file.getName();
         List<String> tokens = filenameSplitter.splitToList(name);
         int size = tokens.size();
@@ -234,9 +287,7 @@ public class Descriptor
             // Note that we assume it's an old format sstable if it has the right number of tokens: this is not perfect
             // but we're just trying to be helpful, not perfect.
             if (size == 5 || size == 6)
-                throw new IllegalArgumentException(String.format("%s is of version %s which is now unsupported and cannot be read.",
-                                                                 name,
-                                                                 tokens.get(size - 3)));
+                throw new IllegalArgumentException(String.format("%s is of version %s which is now unsupported and cannot be read.", name, tokens.get(size - 3)));
             throw new IllegalArgumentException(String.format("Invalid sstable file %s: the name doesn't look like a supported sstable file name", name));
         }
 
@@ -271,27 +322,23 @@ public class Descriptor
         if (!version.isCompatible())
             throw invalidSSTable(name, "incompatible sstable version (%s); you should have run upgradesstables before upgrading", versionString);
 
-        File directory = parentOf(name, file);
-        File tableDir = directory;
+        return new SSTableInfo(version, generation, format, component);
+    }
 
-        // Check if it's a 2ndary index directory (not that it doesn't exclude it to be also a backup or snapshot)
-        String indexName = "";
-        if (tableDir.getName().startsWith(Directories.SECONDARY_INDEX_NAME_SEPARATOR))
+    private static class SSTableInfo
+    {
+        final Version version;
+        final int generation;
+        final SSTableFormat.Type format;
+        final Component component;
+
+        SSTableInfo(Version version, int generation, SSTableFormat.Type format, Component component)
         {
-            indexName = tableDir.getName();
-            tableDir = parentOf(name, tableDir);
+            this.version = version;
+            this.generation = generation;
+            this.format = format;
+            this.component = component;
         }
-
-        // Then it can be a backup or a snapshot
-        if (tableDir.getName().equals(Directories.BACKUPS_SUBDIR))
-            tableDir = tableDir.getParentFile();
-        else if (parentOf(name, tableDir).getName().equals(Directories.SNAPSHOT_SUBDIR))
-            tableDir = parentOf(name, parentOf(name, tableDir));
-
-        String table = tableDir.getName().split("-")[0] + indexName;
-        String keyspace = parentOf(name, tableDir).getName();
-
-        return Pair.create(new Descriptor(version, directory, keyspace, table, generation, format), component);
     }
 
     private static File parentOf(String name, File file)

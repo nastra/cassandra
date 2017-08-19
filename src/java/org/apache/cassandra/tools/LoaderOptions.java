@@ -53,6 +53,8 @@ public class LoaderOptions
     public static final String CONFIG_PATH = "conf-path";
     public static final String THROTTLE_MBITS = "throttle";
     public static final String INTER_DC_THROTTLE_MBITS = "inter-dc-throttle";
+    public static final String KEYSPACE_OPTION = "keyspace";
+    public static final String TABLE_OPTION = "table";
     public static final String TOOL_NAME = "sstableloader";
 
     /* client encryption options */
@@ -82,6 +84,8 @@ public class LoaderOptions
     public final EncryptionOptions.ServerEncryptionOptions serverEncOptions;
     public final Set<InetAddress> hosts;
     public final Set<InetAddress> ignores;
+    public final String keyspace;
+    public final String table;
 
     LoaderOptions(Builder builder)
     {
@@ -102,6 +106,8 @@ public class LoaderOptions
         serverEncOptions = builder.serverEncOptions;
         hosts = builder.hosts;
         ignores = builder.ignores;
+        keyspace = builder.keyspace;
+        table = builder.table;
     }
 
     static class Builder
@@ -124,6 +130,8 @@ public class LoaderOptions
         EncryptionOptions.ServerEncryptionOptions serverEncOptions = new EncryptionOptions.ServerEncryptionOptions();
         Set<InetAddress> hosts = new HashSet<>();
         Set<InetAddress> ignores = new HashSet<>();
+        String keyspace = null;
+        String table = null;
 
         Builder()
         {
@@ -250,6 +258,18 @@ public class LoaderOptions
             return this;
         }
 
+        public Builder keyspace(String keyspace)
+        {
+            this.keyspace = keyspace;
+            return this;
+        }
+
+        public Builder table(String table)
+        {
+            this.table = table;
+            return this;
+        }
+
         public Builder parseArgs(String cmdArgs[])
         {
             CommandLineParser parser = new GnuParser();
@@ -353,6 +373,16 @@ public class LoaderOptions
                     connectionsPerHost = Integer.parseInt(cmd.getOptionValue(CONNECTIONS_PER_HOST));
                 }
 
+                keyspace = null;
+                table = null;
+                if (cmd.hasOption(KEYSPACE_OPTION))
+                {
+                    keyspace = cmd.getOptionValue(KEYSPACE_OPTION);
+                }
+                if (cmd.hasOption(TABLE_OPTION))
+                {
+                    table = cmd.getOptionValue(TABLE_OPTION);
+                }
                 // try to load config file first, so that values can be
                 // rewritten with other option values.
                 // otherwise use default config.
@@ -554,6 +584,8 @@ public class LoaderOptions
         options.addOption("st", SSL_STORE_TYPE, "STORE-TYPE", "Client SSL: type of store");
         options.addOption("ciphers", SSL_CIPHER_SUITES, "CIPHER-SUITES", "Client SSL: comma-separated list of encryption suites to use");
         options.addOption("f", CONFIG_PATH, "path to config file", "cassandra.yaml file path for streaming throughput and client/server SSL.");
+        options.addOption("k", KEYSPACE_OPTION, "KEYSPACE", "Name of the keyspace");
+        options.addOption("tb", TABLE_OPTION, "TABLE", "Name of the table");
         return options;
     }
 

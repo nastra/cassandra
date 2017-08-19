@@ -25,6 +25,7 @@ import javax.net.ssl.SSLContext;
 import com.datastax.driver.core.AuthProvider;
 import com.datastax.driver.core.JdkSSLOptions;
 import com.datastax.driver.core.SSLOptions;
+
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 import org.apache.commons.cli.Option;
@@ -53,17 +54,19 @@ public class BulkLoader
         DatabaseDescriptor.toolInitialization();
         OutputHandler handler = new OutputHandler.SystemOutput(options.verbose, options.debug);
         SSTableLoader loader = new SSTableLoader(
-                options.directory.getAbsoluteFile(),
-                new ExternalClient(
-                        options.hosts,
-                        options.nativePort,
-                        options.authProvider,
-                        options.storagePort,
-                        options.sslStoragePort,
-                        options.serverEncOptions,
-                        buildSSLOptions(options.clientEncOptions)),
-                        handler,
-                        options.connectionsPerHost);
+                                                options.directory.getAbsoluteFile(),
+                                                new ExternalClient(
+                                                                  options.hosts,
+                                                                  options.nativePort,
+                                                                  options.authProvider,
+                                                                  options.storagePort,
+                                                                  options.sslStoragePort,
+                                                                  options.serverEncOptions,
+                                                                  buildSSLOptions(options.clientEncOptions)),
+                                                handler,
+                                                options.connectionsPerHost,
+                                                options.keyspace,
+                                                options.table);
         DatabaseDescriptor.setStreamThroughputOutboundMegabitsPerSec(options.throttle);
         DatabaseDescriptor.setInterDCStreamThroughputOutboundMegabitsPerSec(options.interDcThrottle);
         StreamResultFuture future = null;
@@ -79,7 +82,6 @@ public class BulkLoader
             {
                 future = loader.stream(options.ignores, indicator);
             }
-
         }
         catch (Exception e)
         {
@@ -238,7 +240,7 @@ public class BulkLoader
             sb.append(String.format("   %-24s: %-10s%n", "Total bytes transferred ", FBUtilities.prettyPrintMemory(lastProgress)));
             sb.append(String.format("   %-24s: %-10s%n", "Total duration ", durationMS + " ms"));
             sb.append(String.format("   %-24s: %-10s%n", "Average transfer rate ", FBUtilities.prettyPrintMemoryPerSecond(lastProgress, end - start)));
-            sb.append(String.format("   %-24s: %-10s%n", "Peak transfer rate ",  FBUtilities.prettyPrintMemoryPerSecond(peak)));
+            sb.append(String.format("   %-24s: %-10s%n", "Peak transfer rate ", FBUtilities.prettyPrintMemoryPerSecond(peak)));
             System.out.println(sb.toString());
         }
     }
@@ -298,9 +300,10 @@ public class BulkLoader
     {
         /**
          * Add option with argument and argument name
-         * @param opt shortcut for option name
-         * @param longOpt complete option name
-         * @param argName argument name
+         *
+         * @param opt         shortcut for option name
+         * @param longOpt     complete option name
+         * @param argName     argument name
          * @param description description of the option
          * @return updated Options object
          */
@@ -314,8 +317,9 @@ public class BulkLoader
 
         /**
          * Add option without argument
-         * @param opt shortcut for option name
-         * @param longOpt complete option name
+         *
+         * @param opt         shortcut for option name
+         * @param longOpt     complete option name
          * @param description description of the option
          * @return updated Options object
          */
